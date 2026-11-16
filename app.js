@@ -183,7 +183,6 @@ function genReport(R) {
   const B = [];
   B.push({ k: 'h1', runs: [{ t: (R.vessel || '[Vessel]') + ' – EOD Report Draft' }] });
   B.push({ k: 'p', runs: [{ t: 'Dates: ' + (R.from || '[from]') + ' to ' + (R.to || '[to]') + '   Trainers: ' + (R.trainers.filter(Boolean).join(', ') || '[trainers]') }] });
-  B.push({ k: 'p', runs: [{ t: 'Highlighted text = typed by the PTC. Vet these parts closely.', free: true }] });
   B.push({ k: 'h1', runs: [{ t: '3. DRILLS' }] });
   R.drills.forEach((d, i) => B.push(...genDrill(d, i)));
   B.push({ k: 'h1', runs: [{ t: '4. TRAININGS' }] });
@@ -303,7 +302,7 @@ function seg(path, cur, list) {
   return '<div class="seg">' + list.map(([v, l]) => '<button data-act="set" data-path="' + path + '" data-v="' + v + '" class="' + (cur === v ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
 }
 function photoBlock(arr, path, max, capOpts) {
-  let h = '<h3>Photos <small>' + arr.length + ' / ' + max + '</small></h3><p class="note">Add photos after disembarking, not at sea. Choose the photo from your gallery and write its caption in your own words: what you saw, then why it matters. The Lead Trainer will polish the wording.</p>';
+  let h = '<h3>Photos <small>' + arr.length + ' / ' + max + '</small></h3><p class="note">Add photos after disembarking, not at sea. Choose the photo from your gallery and write its caption in your own words: what you saw, then why it matters. Write in full sentences, in the same standard as the rest of the report.</p>';
   arr.forEach((p, j) => {
     h += '<div class="photo"><div class="prow">' + (p.id ? '<img class="thumb" data-thumb="' + p.id + '" alt="">' : '') + '<span class="pn">Photo ' + (j + 1) + '</span>' +
       '<button class="btn sm ghost" data-act="delphoto" data-path="' + path + '" data-j="' + j + '">Remove</button></div>' +
@@ -434,6 +433,7 @@ function viewPreview() {
     '<button class="btn ghost" data-act="copy">Copy text</button></div>';
   const missing = blocksToText(B).match(/\[[^\]]+\]/g) || [];
   if (missing.length) h += '<p class="warn">' + missing.length + ' gaps still to fill, shown in [brackets].</p>';
+  h += '<p class="note"><mark>Yellow</mark> = written in your own words.</p>';
   h += '<div class="doc">' + B.map(b => (b.k === 'img' ? '<p class="note">[photo]</p>' : '<' + (b.k === 'p' ? 'p' : b.k) + (b.ind ? ' class="ind"' : '') + '>' + b.runs.map(r => (r.free ? '<mark>' : '') + (r.b ? '<b>' : '') + esc(r.t) + (r.b ? '</b>' : '') + (r.free ? '</mark>' : '')).join('') + '</' + (b.k === 'p' ? 'p' : b.k) + '>')).join('') + '</div>';
   return h + '</main>';
 }
