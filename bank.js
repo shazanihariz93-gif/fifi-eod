@@ -1,0 +1,413 @@
+// FiFi EOD Report Builder — reference bank
+// Edit wording here. Placeholders: {a / b / c} = pick list, {Squad} = squad pick, {anything else} = typed text.
+// t = done well, f = needs work. c = clause (Trainers' Remarks), h = Highlighted Points, s = Suggestion, p = photo caption.
+
+const SQUADS = ['the 1st Fire Squad', 'the 2nd Fire Squad', 'both Fire Squads'];
+// {rank} placeholders use this list (ranks are never typed)
+const RANKS = ['Master', 'Chief Officer', '2nd Officer', '3rd Officer', 'Chief Engineer', '2nd Engineer', '3rd Engineer', '4th Engineer', 'ETO', 'Bosun', 'Able Seaman', 'Ordinary Seaman', 'Oiler', 'Fitter', 'Chief Cook', 'Messman', 'Cadet'];
+
+const PHOTO_CAP = { drill: 8, lesson: 2 };
+
+const ABBR = [
+  ['PPE', 'Personal Protective Equipment'],
+  ['OSSL', 'On Scene Squad Leader'],
+  ['TFFP', 'Tactical Firefighting Plan'],
+  ['TIC', 'Thermal Imaging Camera'],
+  ['BA', 'Breathing Apparatus'],
+  ['LDV', 'Lung Demand Valve'],
+  ['EEBD', 'Emergency Escape Breathing Device'],
+  ['RSE', 'Rescue Scene Evaluation'],
+  ['RRK', 'Rope Rescue Kit'],
+  ['PTT', 'Push-To-Talk'],
+  ['BVM', 'Bag Valve Mask'],
+  ['AB', 'Able Seaman'],
+];
+
+// Fixed spellings (Andy/Weimin review rules)
+const GLOSSARY = [
+  [/\bbranchpipes?\b/gi, m => m.toLowerCase().endsWith('s') ? 'branch pipes' : 'branch pipe'],
+  [/\bD Million\b/g, 'D Maillon'],
+  [/\bAble Body( personnel)?\b/gi, 'Able Seaman'],
+  [/\bDy OSSL\b/g, 'Deputy OSSL'],
+  [/\b2nd Medical Officer\b/g, '2nd Officer'],
+  [/Keep It Short and Simple/g, 'Keep It Short and Sharp'],
+  [/\bobsered\b/g, 'observed'],
+];
+
+const DRILL_TYPES = [
+  { id: 'galley', title: 'Fire In Accommodation', loc: 'Galley' },
+  { id: 'boiler', title: 'Fire In Engine Room', loc: 'Auxiliary Boiler' },
+  { id: 'workshop', title: 'Fire In Engine Room', loc: 'Engine Workshop' },
+  { id: 'other', title: 'Fire In {location}', loc: '' },
+];
+
+const PHASES = [
+  { id: 'ppe', name: 'PPE Donning', tr: 0 },
+  { id: 'ops', name: 'Firefighting Operations', tr: 1 },
+  { id: 'sup', name: 'Support and Boundary Cooling', tr: 1 },
+  { id: 'cas', name: 'Casualty Management', tr: 2 },
+  { id: 'cmd', name: 'Command and Communication', tr: 2 },
+];
+
+const TR_HEADS = [
+  { name: 'Operational Readiness',
+    good: 'The Fire Squads responded promptly and completed PPE preparation with minimal intervention.',
+    mixed: 'The Fire Squads responded promptly to the alarm.',
+    needs: 'PPE preparation required improvement, with several discrepancies observed.' },
+  { name: 'Firefighting Execution',
+    good: 'The attack team completed the door entry procedure, maintained a low profile and advanced under nozzle protection.',
+    mixed: 'The Fire Squads applied the firefighting procedures covered during training.',
+    needs: 'Several deficiencies were observed during the attack phase.' },
+  { name: 'Command, Support and Casualty Management',
+    good: 'The OSSL and Deputy OSSL maintained effective command and control throughout the exercise.',
+    mixed: 'The OSSL maintained command throughout the exercise.',
+    needs: 'Command and casualty management require further strengthening.' },
+];
+
+const CREW_STARTERS = ['I learned that ', 'I realised that ', 'I could see improvement in ', 'The drill showed the importance of '];
+
+const OBS = {
+ ppe: [
+  {l:'Boiler suit under PPE',k:'f',c:'firefighters wearing boiler suits beneath firefighting PPE',h:'Firefighters were observed wearing boiler suits beneath firefighting PPE, which may increase heat retention and accelerate fatigue during prolonged operations.',s:'To reinforce the selection of lightweight undergarments beneath firefighting PPE to reduce heat stress.',p:'The firefighter was observed wearing a boiler suit beneath the firefighting PPE. Additional layers may increase heat retention and contribute to fatigue during prolonged firefighting operations.'},
+  {l:'Light clothing under PPE',k:'t',c:'firefighters removing boiler suits before donning PPE',h:'Firefighters removed their boiler suits before donning firefighting PPE, demonstrating good awareness of human thermoregulation principles.',p:'The firefighter was observed wearing a T-shirt and shorts beneath the firefighting PPE. Appropriate undergarment selection may reduce heat retention and improve comfort and endurance during prolonged operations.'},
+  {l:'Dressing Assistants not proactive',k:'f',c:'limited support from Dressing Assistants',h:'Dressing Assistants provided limited support during PPE preparation, resulting in firefighters completing portions of the dressing process themselves.',s:'To ensure Dressing Assistants prepare the next PPE item, rectify dressing discrepancies and complete final checks before deployment.',p:'The Dressing Assistant was not actively supporting the firefighter during PPE preparation. Dressing Assistants serve as the final check to ensure firefighters are fully protected before deployment.'},
+  {l:'Dressing Assistants proactive',k:'t',c:'proactive support from Dressing Assistants',h:'Dressing Assistants provided proactive support, preparing the next PPE item and completing final checks before deployment.',p:'Good coordination was observed between the firefighter and Dressing Assistant during PPE preparation. Effective teamwork supports faster mobilisation and reduces dressing errors.'},
+  {l:'BA strap adjustment unfamiliar',k:'f',c:'unfamiliarity with BA waist strap adjustment',h:'Dressing Assistants demonstrated limited familiarity with BA waist strap adjustment, delaying firefighter preparation.',s:'To reinforce Dressing Assistant familiarity with BA harness and waist strap adjustment.',p:'Uncertainty was observed as the Dressing Assistant had trouble identifying the correct BA waist strap adjustment. Familiarity with BA adjustment enables timely preparation and deployment.'},
+  {l:'BA straps twisted',k:'f',c:'twisted BA set straps',h:'Twisted BA set straps were observed on {Squad} during dressing.',s:'To check BA straps for twists during final PPE checks.',p:'The BA set straps were twisted during dressing. Twisted straps may affect load distribution and comfort, and should be corrected before deployment.'},
+  {l:'Face mask donned too early',k:'f',c:'premature face mask donning',h:'Firefighters from {Squad} donned the face mask inside the fire locker instead of at the Staging Area.',s:'To ensure face masks are donned at the Staging Area immediately before entry.',p:'The face mask was donned inside the fire locker instead of at the Staging Area. Premature donning may contribute to heat build-up, visor fogging and fatigue before entry.'},
+  {l:'Face mask donned at Staging Area',k:'t',c:'face masks donned only at the Staging Area',h:'Face masks were donned only at the Staging Area, reducing unnecessary fatigue and visor fogging before deployment.',p:'The firefighter donned the face mask at the Staging Area immediately before entry. Correct timing reduces heat build-up and visor fogging.'},
+  {l:'Laryngophone fitted wrongly',k:'f',c:'incorrect laryngophone fitment',h:'The laryngophone earpiece was inserted directly into the ear without securing the retention loop over the ear.',s:'To check laryngophone fitment, with the retention loop secured over the ear, before deployment.',p:'The laryngophone earpiece was inserted directly into the ear without first securing the retention loop. Incorrect fitment may affect communication clarity and cause the earpiece to dislodge.'},
+  {l:'Laryngophone fitted correctly',k:'t',c:'correct laryngophone fitment',h:'The laryngophone was fitted correctly, with the retention loop secured over the ear.',p:'Correct laryngophone fitment was observed, with the retention loop secured over the ear. Proper fitment supports clearer communication during firefighting operations.'},
+  {l:'Radio / PTT inside jacket',k:'f',c:'improper positioning of communication equipment',h:'The {radio / PTT unit} was placed inside the firefighting jacket instead of the designated pocket, limiting immediate access.',s:'To reinforce the correct positioning of radios and PTT units during dressing and final checks.',p:'The {radio / PTT unit} was positioned beneath the firefighting jacket. Communication equipment should remain accessible for timely transmission of updates and emergency messages.'},
+  {l:'Axe holster inwards / axe at rear',k:'f',c:"incorrect fireman's axe positioning",h:"The fireman's axe {holster faced inwards / was positioned at the rear}, affecting immediate access during operations.",s:'To check axe orientation and position during final PPE checks.',p:"The fireman's axe {holster faced inwards / was positioned at the rear}, restricting access to the axe. Correct positioning allows the firefighter to draw the axe without obstruction."},
+  {l:'Fire belt loose',k:'f',c:'loose fire belt fitment',h:"A firefighter's fire belt was loosely fitted, affecting equipment security and movement.",s:'To check fire belt fitment before deployment.',p:'The fire belt was insufficiently tightened. A secure belt prevents equipment movement and supports safe deployment.'},
+  {l:'Flash hood not sealed',k:'f',c:'flash hood not sealed around the face mask',h:'The flash hood was not sealed around the face mask, leaving exposed skin around the {face / neck}.',s:'To ensure the flash hood is fully sealed over the face mask before deployment.',p:'The flash hood was not properly sealed around the face mask, leaving skin exposed. Exposed areas should be corrected before deployment to maintain thermal protection.'},
+  {l:'Jacket closures not secured',k:'f',c:'unsecured PPE components',h:'Sections of the firefighting jacket closure system were left open.',s:'To ensure all jacket fastenings are secured during final PPE checks.',p:'The firefighting jacket was not fully secured. Open closures may reduce thermal protection and allow heat or smoke ingress.'},
+  {l:'Helmet chin strap not secured',k:'f',c:'unsecured helmet chin straps',h:'Helmet chin straps were not consistently secured before firefighters proceeded to the Staging Area.',s:'To ensure helmet chin straps are secured before firefighters proceed to the Staging Area.',p:'The helmet chin strap was not secured before deployment. An unsecured helmet may dislodge during movement and reduce head protection.'},
+  {l:'Torchlight not secured / not on',k:'f',c:'torchlights not secured or activated before entry',h:'Torchlights were {not secured to the jacket loops / activated only after entry}, affecting visibility in low-visibility conditions.',s:'To secure and activate torchlights before entry.',p:'Torchlights were {not secured to the jacket loops / activated only after entry}. Torchlights should be secured and switched on before entry to maintain visibility.'},
+  {l:'Missing equipment',k:'f',c:'firefighters proceeding without essential equipment',h:'A firefighter proceeded without the {bicycle horn / fireman\'s axe / fire belt / radio}.',s:'To verify all essential equipment is carried during final PPE checks.',p:'A firefighter was observed without the {bicycle horn / fireman\'s axe / fire belt / radio}. All essential equipment should be carried to support communication and safety during operations.'},
+  {l:'Work gloves under fire gloves',k:'f',c:'work gloves worn beneath firefighting gloves',h:'A firefighter wore work gloves beneath firefighting gloves.',s:'To reinforce correct glove use during dressing drills.',p:'A firefighter was observed wearing work gloves beneath the firefighting gloves. Additional layers may reduce dexterity when operating equipment.'},
+  {l:'PPE item defective',k:'f',c:'a defective {defective item}',h:'The {defective item} was defective. The Safety Officer was informed.',s:'To inspect and replace worn or defective PPE components as part of routine checks.',p:'The {defective item} was defective. Routine inspection and replacement of worn PPE maintains the intended level of protection.'},
+ ],
+ ops: [
+  {l:'Door entry not done / incomplete',k:'f',c:'entry without completing the heat assessment and door entry procedure',h:'{Squad} entered the compartment without fully completing the heat assessment and door entry procedure, reducing their ability to assess conditions before committing.',s:'To conduct compartment firefighting drills focusing on heat assessment and door entry fundamentals.',p:'The door entry procedure was not carried out correctly and the heat assessment was omitted before opening the door. Both steps are necessary to assess conditions and support safer entry.'},
+  {l:'Door entry done well',k:'t',c:'completion of the door entry procedure',h:'{Squad} completed the door entry procedure, using a controlled door opening and short water pulses before committing into the space.',p:'The Fire Squad conducted the door entry procedure using a controlled door opening and short water pulses. Proper door entry reduces exposure to adverse fire conditions on entry.'},
+  {l:'No compartment cooling before entry',k:'f',c:'compartment not cooled before the door was opened',h:'The compartment was not cooled effectively before the door was opened, increasing the risk of fire gas ignition on entry.',s:'To practise compartment cooling with short pulses before door opening.',p:'The compartment was not cooled before the door was opened. Gas cooling before entry reduces the risk of fire gas ignition.'},
+  {l:'Not keeping low',k:'f',c:'not maintaining a low profile',h:'{Squad} did not consistently maintain a low profile within the simulated smoke environment.',s:'To reinforce low-profile movement during advancement in smoke-affected areas.',p:'The firefighters were observed moving upright within the passageway. A low profile reduces exposure to heat and smoke in the upper layer.'},
+  {l:'Kept low',k:'t',c:'maintaining a low profile',h:'{Squad} maintained a low profile while advancing towards the seat of the fire.',p:'The Fire Squad maintained a low profile while advancing towards the seat of the fire. This reduces exposure to heat and smoke during compartment firefighting.'},
+  {l:'Gloves removed at door',k:'f',c:'gloves removed during door entry',h:'A firefighter removed gloves while checking the door, exposing the hands to heat.',s:'To reinforce that gloves remain on throughout door entry, using the back of the gloved hand to check the door.',p:'A firefighter removed gloves during door entry. This exposes the hands directly to heat.'},
+  {l:'No nozzle protection',k:'f',c:'nozzle protection not maintained',h:'Nozzle protection was not maintained during {casualty extrication / fire attack}, reducing protection for firefighters operating near the fire.',s:'To reinforce protective water cover during casualty extrication and fire attack.',p:'Nozzle protection was not maintained during {casualty extrication / fire attack}. Protective water cover should be maintained to shield firefighters and casualty from heat.'},
+  {l:'Moved under nozzle protection',k:'t',c:'advancing under nozzle protection',h:'Firefighters positioned themselves behind the nozzle protection provided by the attack line.',p:'The Fire Squad advanced behind the water shield provided by the attack line. This reduces heat exposure and supports safer movement.'},
+  {l:'Wrong extinguisher / medium',k:'f',c:'an unsuitable extinguishing method initially selected',h:'An unsuitable extinguisher was initially selected for the {deep fat fryer / electrical} fire before {trainer intervention / the fixed system was activated}.',s:'To reinforce extinguishing media selection, including the fixed wet chemical system for deep fat fryer fires.',p:'An unsuitable extinguisher was initially selected for the simulated {deep fat fryer / electrical} fire. Firefighters must identify the correct extinguishing method before approaching the fire.'},
+  {l:'Correct extinguisher / medium',k:'t',c:'correct identification of the fire class and extinguishing method',h:'{Squad} correctly identified the {Class F / electrical / Class B} fire and selected the {fire blanket / wet chemical system / CO₂ extinguisher / foam extinguisher}.',p:'The correct extinguishing medium was identified for the {Class F / electrical / Class B} fire. This demonstrates good awareness of fire classification and media selection.'},
+  {l:'Turbo nozzle not used',k:'f',c:'turbo nozzle not utilised',h:'The turbo nozzle available on board was not utilised, despite its adjustable patterns being more suitable for compartment firefighting.',s:'To prepare turbo nozzles for compartment firefighting where appropriate.',p:'The turbo nozzle was not deployed during the drill. Adjustable spray patterns support compartment cooling, firefighter protection and direct attack.'},
+  {l:'TIC not used / not used well',k:'f',c:'TIC not utilised effectively',h:'The TIC was {not deployed / not used effectively} to assess door heat or identify hot spots.',s:'To reinforce TIC use at each entry point before committing personnel.',p:'The TIC was not used to assess the compartment door before entry. Thermal images help assess heat conditions before advancing.'},
+  {l:'TIC used well',k:'t',c:'use of the TIC before entry',h:'{Squad} used the TIC to assess conditions before entry.',p:'A TIC was used to assess heat conditions before entry. This gives the Fire Squad information on conditions beyond the door.'},
+  {l:'Team separated',k:'f',c:'team integrity briefly affected',h:'Team integrity was briefly affected when a firefighter separated from the nozzle operator.',s:'To reinforce team integrity during offensive firefighting.',p:'A firefighter separated from the nozzle operator to resolve hose movement. Firefighting partners should remain together at all times inside the risk area.'},
+  {l:'Both squads coordinated',k:'t',c:'good coordination between both Fire Squads',h:'Good coordination was observed between both Fire Squads, with the 1st Fire Squad providing water shield protection while the 2nd Fire Squad {advanced the hose / deployed the extinguisher}.',p:'Both Fire Squads worked together during advancement and fire attack. Coordinated movement supports mutual protection inside the affected area.'},
+  {l:'LDV not connected in risk area',k:'f',c:'LDV not connected inside the risk area',h:'A firefighter from {Squad} was observed inside the risk area with the LDV not connected.',s:'To ensure LDV connection is confirmed at the Staging Area before entry.',p:'The firefighter was inside the risk area with the LDV not connected. Respiratory protection must be confirmed before entry.'},
+ ],
+ sup: [
+  {l:'Hose piled / no bights / kinks',k:'f',c:'hose advancement affected by poor hose arrangement',h:'The attack hose was laid with insufficient bights towards the direction of travel, causing kinks and resistance during advancement.',s:'To arrange sufficient hose bights towards the entry point to prevent kinking.',p:'The attack hose was arranged in a pile without bights towards the direction of travel. Poor arrangement increases kinking and restricts advancement.'},
+  {l:'Hose laid well',k:'t',c:'hose bights arranged in the direction of travel',h:'Hoses were laid with sufficient bights towards the entry points, reducing resistance during advancement.',p:'The hose was laid in a straight and orderly manner towards the entry point. This reduces resistance and allows smoother advancement.'},
+  {l:'Insufficient hose length',k:'f',c:'insufficient hose length',h:'Hose advancement was delayed by insufficient hose length to reach the incident area.',s:'To plan hose deployment, including hose length and water supply continuity.',p:'The hose line did not have sufficient length to reach the incident area. Hose length should be planned before the attack team advances.'},
+  {l:'Door closed on hose / no chock',k:'f',c:'doors closing onto the hose line',h:'The compartment door was not secured open, allowing it to close onto the hose line and restrict advancement.',s:'To provide and use door chocks to maintain door control during hose advancement.',p:'The door was not secured in the open position and closed onto the hose line. A door chock or suitable method prevents hose obstruction.'},
+  {l:'Door chock used',k:'t',c:'door chock used to secure the door',h:'A door chock was used to secure the door open, supporting hose advancement through the doorway.',p:'A door chock was positioned to keep the door open during entry. This prevents the door obstructing the hose and supports smoother advancement.'},
+  {l:'Boundary cooling set up well',k:'t',c:'boundary cooling prepared in advance',h:'The Support Squad prepared boundary cooling hoses promptly and positioned them {below / adjacent to} the incident area, supporting efforts to limit fire spread.',p:'Boundary cooling was applied to the adjacent area by the Support Squad. This limits heat transfer towards neighbouring compartments.'},
+  {l:'No boundary cooling / late',k:'f',c:'boundary cooling not established',h:'Boundary cooling was not established in time, allowing potential heat transfer to adjacent compartments.',s:'To assign the Support Squad to establish boundary cooling early in the response.',p:'Boundary cooling was not established around the incident area. Early boundary cooling limits fire spread to adjacent spaces.'},
+  {l:'Spare BA cylinder on shoulder',k:'f',c:'unsafe carrying of spare BA cylinders',h:'A spare BA cylinder was carried over the shoulder during movement to the Staging Area, risking damage to the valve if dropped.',s:'To reinforce safe handling of spare BA cylinders during deployment.',p:'A spare BA cylinder was carried over the shoulder. A slip could cause impact damage to the cylinder valve, so a controlled carrying method should be used.'},
+  {l:'Cylinders not secured at staging',k:'f',c:'spare BA cylinders not secured at the Staging Area',h:'Spare BA cylinders were not consolidated or secured at the Staging Area, allowing cylinder movement.',s:'To standardise the staging and securing of spare BA cylinders.',p:'Spare BA cylinders were placed loosely at the Staging Area. Cylinders should be secured to prevent rolling and damage.'},
+  {l:'Cylinders secured at staging',k:'t',c:'spare BA cylinders secured at the resource station',h:'Spare BA cylinders were consolidated at the resource station and secured to prevent movement.',p:'Spare BA cylinders were consolidated and secured using available ropes. This improves equipment accountability and prevents rolling.'},
+  {l:'Peer correction on cylinder carrying',k:'t',c:'peer-to-peer correction of cylinder carrying',h:'The {rank} corrected a colleague on the proper method of carrying a spare BA cylinder.',p:'The {rank} advised a colleague on the correct method of transporting a spare BA cylinder. Peer correction supports a positive safety culture.'},
+  {l:'Staging area poorly organised',k:'f',c:'Staging Area not organised',h:'The Staging Area was not well organised, with no {spare hoses / drinking water / spare cylinders} prepared.',s:'To establish an organised Staging Area with spare cylinders, hoses and welfare provisions.',p:'The Staging Area lacked {spare hoses / drinking water / spare cylinders}. An organised Staging Area supports readiness for prolonged operations.'},
+ ],
+ cas: [
+  {l:'Casualty located and recovered',k:'t',c:'casualty located and extricated successfully',h:'The casualty was located and extricated by {Squad} and transferred to the Medical Team.',p:'The Fire Squad recovered the casualty from the incident area to a place of safety. Effective teamwork reduces recovery time.'},
+  {l:'Stretcher straps wrong',k:'f',c:'incorrect casualty strapping',h:'The Medical Team demonstrated limited familiarity with the Petzl Nest securing system, with straps {incorrectly routed / twisted / tied rather than buckled}.',s:'To conduct practical casualty packaging drills using the Petzl Nest stretcher.',p:'The casualty was packaged in the Petzl Nest stretcher, but several straps were {incorrectly routed / twisted / tied rather than buckled}. Improper packaging reduces casualty stability during movement.'},
+  {l:'Stretcher packaged correctly',k:'t',c:'correct casualty packaging',h:'The casualty was packaged correctly, and the straps were verified by the 2nd Officer as Medical Team Leader before transport.',p:'The 2nd Officer verified the stretcher securing arrangements before transport. Supervision ensures the casualty remains secured during evacuation.'},
+  {l:'Log roll used',k:'t',c:'log roll transfer onto the stretcher',h:'The casualty was transferred onto the stretcher using the log roll technique.',p:'The casualty was transferred using the log roll technique. This supports spinal management and controlled handling.'},
+  {l:'Only 2 carrying stretcher',k:'f',c:'insufficient stretcher bearers',h:'Only two crew members carried the stretcher down the stairway, reducing control.',s:'To assign at least four personnel for stretcher transportation.',p:'Only two crew members carried the stretcher down the stairway. At least four personnel are needed for controlled transport.'},
+  {l:'4 bearers / good stairway carry',k:'t',c:'controlled stretcher transport',h:'Four crew members carried the stretcher, providing controlled transport down the stairway.',p:'Four crew members were assigned to carry the stretcher. Sufficient manpower maintains balance and control.'},
+  {l:'Medical equipment missing',k:'f',c:'Medical Team arriving without essential equipment',h:'The Medical Team arrived without the {medical bag / oxygen cylinder / cervical collar}, so essential equipment was not immediately available.',s:'To check medical equipment before each drill.',p:'The {medical bag / oxygen cylinder / cervical collar} was not brought to the scene. Essential medical equipment should be checked and ready before an emergency.'},
+  {l:'Medical Team well prepared',k:'t',c:'Medical Team arriving prepared',h:'The Medical Team arrived with the medical bag and stretcher and responded promptly upon casualty handover.',p:'The Medical Team responded promptly and commenced casualty packaging without delay. Early mobilisation supports timely extraction.'},
+  {l:'Oxygen cylinder not secured',k:'f',c:'oxygen cylinder carried separately',h:'The oxygen cylinder was carried separately instead of being secured to the stretcher.',s:'To secure the oxygen cylinder to the stretcher before movement.',p:'The oxygen cylinder was carried separately. Securing it to the stretcher frees hands and keeps it with the casualty.'},
+  {l:'Treatment area in smoke',k:'f',c:'Medical Team positioned in the smoke-affected area',h:'The Medical Team positioned itself in the smoke-affected corridor, exposing personnel unnecessarily.',s:'To establish casualty treatment areas outside smoke-affected zones.',p:'The Medical Team waited inside the smoke-affected corridor. Treatment areas should be set up in a safe area.'},
+  {l:'Emergency undressing prompt',k:'t',c:'prompt emergency undressing',h:'Emergency undressing was initiated promptly following the simulated firefighter collapse.',p:'Supporting crew carried out emergency undressing in a coordinated manner. Prompt PPE removal supports cooling and earlier medical assessment.'},
+  {l:'Missing firefighter not noticed',k:'f',c:'missing firefighter not identified promptly',h:'Firefighters from Fire Squad 1 or 2 initially did not realise one of their members was not accounted for.',s:'To reinforce buddy awareness and firefighter accountability during withdrawal.',p:'The Fire Squad withdrew without noticing a missing member. Buddy checks ensure distressed personnel are identified promptly.'},
+  {l:'Oxygen / BVM use uncertain',k:'f',c:'uncertainty in oxygen administration',h:'Uncertainty was observed regarding {the oxygen flow rate / the BVM seal}.',s:'To refresh oxygen administration and BVM use during medical drills.',p:'Uncertainty was observed regarding {the oxygen flow rate / the BVM seal}. Correct technique is essential for effective casualty care.'},
+ ],
+ cmd: [
+  {l:'TFFP used in briefing',k:'t',c:'TFFP used during the pre-drill briefing',h:'The OSSL used the TFFP to brief the crew on the layout, access routes, firefighting arrangements and tasking.',p:'The OSSL used the TFFP during the pre-drill briefing. This gives the crew a clear response plan before the drill.'},
+  {l:'TFFP not used',k:'f',c:'TFFP not utilised',h:'The OSSL conducted a briefing, but the TFFP was not utilised.',s:'To incorporate the TFFP into pre-drill and incident briefings.',p:'The briefing was conducted without the TFFP. Vessel-specific plans support team deployment and route planning.'},
+  {l:'OSSL and Deputy OSSL shared roles',k:'t',c:'effective delegation between the OSSL and Deputy OSSL',h:'The OSSL and Deputy OSSL divided oversight of {firefighting and casualty response / accountability and bridge reporting}.',p:'The OSSL and Deputy OSSL coordinated command of the response. Shared roles allow parallel activities to be managed.'},
+  {l:'BA accountability recorded',k:'t',c:'BA accountability recorded before entry',h:'The Deputy OSSL recorded team strength and BA pressures before entry.',p:'The Deputy OSSL recorded crew strength and BA cylinder pressures before deployment. Accountability and air management support firefighter safety.'},
+  {l:'BA board not updated',k:'f',c:'BA monitoring not maintained',h:'BA monitoring information was not updated as conditions changed.',s:'To update the BA monitoring board whenever pressure, status or tasking changes.',p:'The BA board was not updated during the operation. Current information lets the OSSL manage withdrawal timings.'},
+  {l:'Updates from inside not sent',k:'f',c:'information not relayed promptly to the OSSL',h:'Firefighters required prompting before relaying {fire conditions / casualty location / fire conditions and casualty location} to the OSSL.',s:'To reinforce timely communication of fire conditions, casualty location and developments to the OSSL.',p:'Firefighters inside the compartment required prompting to report conditions. Timely updates support tactical decisions.'},
+  {l:'Radio reception / noise problems',k:'f',c:'communication difficulties',h:'Communication was affected by {radio reception / engine room noise}, requiring messages to be repeated.',s:'To verify radio coverage between the incident area and command during drills.',p:'Messages from the incident area had to be repeated due to {radio reception / engine room noise}. Reliable communication maintains situational awareness.'},
+  {l:'Nozzle operator handling radio',k:'f',c:'nozzle operator handling communications',h:'The nozzle operator handled both firefighting and communication, instead of the supporting firefighter.',s:'To assign communications to the supporting firefighter so the nozzle operator can focus on the hose.',p:'The nozzle operator was handling both the nozzle and the radio. Communications are typically managed by the supporting firefighter.'},
+  {l:'Good comms throughout',k:'t',c:'communication maintained throughout',h:'Communication with the Fire Squads was maintained throughout, allowing the command team to monitor conditions and progress.',p:'Communication between the Fire Squad and OSSL was maintained throughout. This supports situational awareness and coordination.'},
+  {l:'Updates not acknowledged',k:'f',c:'updates not acknowledged by command',h:'Updates from deployed teams were not consistently received or acknowledged by the OSSL.',s:'To ensure critical updates are acknowledged and confirmed by command.',p:'Updates transmitted from the incident area were not acknowledged. Confirmation ensures critical information is received.'},
+  {l:'2nd Fire Squad not deployed',k:'f',c:'2nd Fire Squad not actively deployed',h:'The 2nd Fire Squad was not actively deployed during the drill.',s:'To assign clear tasks to both Fire Squads during the briefing.',p:''},
+ ],
+};
+
+// Lessons. lv = Trainers' Remarks opener by crew level. pt = teaching points (Highlighted Points). fd = vessel findings (r = Trainers' Remarks, h = Highlighted, s = Suggestion). sg = standard suggestions. cap = standard captions.
+const LESSONS = [
+ {n:'4.1', t:'Management/Organization',
+  lv:{strong:"The crew demonstrated good familiarity with the vessel's TFFP and understood its role in supporting emergency response planning.",average:'The crew demonstrated awareness of the TFFP and the TICs onboard. Further practice in concise radio reporting would improve the quality of information provided to the OSSL.',needs:'A communication challenge was identified, with the OSSL having difficulty understanding radio transmissions.'},
+  pt:[
+   {l:'TFFP contents and use',x:'The TFFP provides vessel-specific information on firefighting arrangements, access routes and emergency response resources, supporting tactical decision-making during an incident.'},
+   {l:'WWW / KISS / CMA CGM radio phrases',x:'The WWW (Who, What, Where) reporting method, the KISS (Keep It Short and Sharp) principle and the CMA CGM firefighting radio phrases help ensure critical information is communicated accurately and efficiently to the OSSL.'},
+   {l:'Radio report content',x:'Radio reports should focus on team location, fire conditions, hazards, actions taken and support required.'},
+   {l:'Different TICs and uses',x:'Different TICs onboard may serve different functions. Crew members should understand the intended application of each device for compartment assessment, casualty search and external boundary cooling.'},
+  ],
+  fd:[
+   {l:'TIC model onboard',r:"The crew gained a better understanding of the vessel's {TIC model} TIC and its operational applications.",h:'The vessel is equipped with a {TIC model} TIC, which can support external defensive firefighting and boundary cooling by identifying areas of elevated temperature.'},
+   {l:'Radio voice distortion',r:'Radio transmissions were affected by voice distortion when using the laryngophone, reducing message clarity.',s:'To check laryngophone voice clarity during communication checks before entry.'},
+   {l:'TIC charging dock not connected',r:'The TIC charging dock was found disconnected from the power supply.',s:'To keep the TIC charging dock connected and include battery checks in routine fire locker checks.'},
+  ],
+  sg:['To incorporate the WWW communication format and CMA CGM firefighting radio phrases during fire drills to improve radio discipline.','To incorporate TIC deployment into fire drills to improve familiarity and routine use.'],
+  cap:['The TFFP was reviewed with the crew. Familiarity with these documents enables quick access to critical information during an incident.','The different TICs onboard were reviewed during the lesson. Understanding each device\'s application supports compartment assessment and firefighting decisions.','The CMA CGM firefighting radio phrase format was introduced. Standardised reporting terminology reduces misunderstandings during an incident.']},
+ {n:'4.2', t:'Celerity',
+  lv:{strong:'The crew demonstrated good teamwork during the dressing procedure, with Dressing Assistants actively supporting PPE preparation.',average:'The crew responded promptly to their stations, but some uncertainty remained during PPE preparation.',needs:'Several PPE discrepancies were identified during the exercise, highlighting the need for stronger Dressing Assistant involvement and final checks.'},
+  pt:[
+   {l:'Dressing Assistants are the final check',x:'Dressing Assistants serve as the final check to ensure firefighters are fully protected from heat and flame exposure before deployment.'},
+   {l:'Speed with accuracy',x:'Effective PPE preparation requires both speed and accuracy, as rushed preparation may result in exposed areas or missing equipment.'},
+   {l:'Donning sequence and final checks',x:'Firefighter readiness depends on completing the correct PPE donning sequence and final equipment checks after arriving at the fire locker.'},
+   {l:'Bicycle horn',x:'Bicycle horns provide an additional means of communication within the incident area and may be used to signal distress.'},
+  ],
+  fd:[
+   {l:'Earpiece / waist strap / belt clasp gaps',r:"Minor gaps were identified in the fitting of {communication earpieces / BA waist straps / fireman's belt clasps}.",s:"To conduct time-focused PPE and BA dressing drills focusing on communication equipment setup, waist strap adjustment and fireman's belt assembly."},
+   {l:'Flash hood exposed',r:'The flash hood remained exposed outside the firefighting PPE on one firefighter.',s:'To conduct periodic dressing drills focusing on identifying exposed PPE components before deployment.'},
+   {l:'Bicycle horn missing',r:'A firefighter was observed without a bicycle horn attached.',s:'To ensure bicycle horns are carried by all firefighters.'},
+  ],
+  sg:['To assign specific duties to each Dressing Assistant, including preparing PPE and conducting final checks.','To practise the PPE donning sequence until preparation can be completed without uncertainty or delay.'],
+  cap:['The communication earpiece was not positioned correctly during dressing. This should be identified and corrected by the Dressing Assistant before deployment.','The firefighting jacket straps remained exposed after dressing. Loose straps should be secured before entry into the affected space.']},
+ {n:'4.3', t:'Galley Visit',
+  lv:{strong:'The galley personnel were familiar with the galley firefighting arrangements, including the fixed wet chemical system protecting the deep fat fryer.',average:'Most of the crew were familiar with the galley emergency equipment, although awareness varied regarding {the wet chemical activation points / the scope of the galley CO₂ system}.',needs:'A knowledge gap was identified regarding the selection of the correct extinguishing medium for galley fire scenarios.'},
+  pt:[
+   {l:'Correct extinguishing media',x:'The selection of an appropriate extinguishing medium is critical, as using an incorrect extinguisher on an incompatible fire class may place personnel at risk.'},
+   {l:'Wet chemical system',x:'The fixed wet chemical system protecting the deep fat fryer may be activated from dedicated release stations within the galley. Familiarity with the activation points supports faster deployment during cooking oil fires.'},
+   {l:'Galley CO₂ for exhaust duct only',x:'The fixed CO₂ system protects the galley exhaust duct only and is not a total flooding system for the galley.'},
+   {l:'Isolate energy, watch for re-ignition',x:'Galley fire response should begin with safe isolation of the affected equipment and energy source. Personnel should monitor for residual heat, as re-ignition may occur after the visible fire is controlled.'},
+   {l:'Nozzles for protective cover',x:'Firefighting nozzles are not solely used for fire attack. Appropriate nozzle patterns may also provide protective water cover while crews advance or withdraw.'},
+  ],
+  fd:[
+   {l:'First aid kit check',r:'The galley first aid kit was checked and found {complete / missing items / to contain non-medical items, which were removed}.',h:'Dedicated first aid storage areas should contain only medical equipment and supplies, so that medical resources can be accessed without delay.',s:'To review the contents of the galley first aid kit regularly and keep it free of non-medical items.'},
+   {l:'Wet chemical activation points',r:'The wet chemical system can be activated from {1 / 2} locations within the galley, although not all crew were aware of each location.',s:'To include all wet chemical activation points in routine familiarisation and drills.'},
+   {l:'Electrical panel in galley',r:'An electrical distribution panel serving galley equipment was identified during the visit.',h:'Electrical hazards should be considered alongside heat and fire risks when assessing a galley fire.'},
+   {l:'Extinguishers serviceable',r:'The portable extinguishers in the galley were unobstructed and in serviceable condition.'},
+  ],
+  sg:['To incorporate extinguishing media selection scenarios into fire drills.','To practise activating the fixed wet chemical system, including its limitations.'],
+  cap:['One of the wet chemical activation stations was reviewed during the visit. Knowing the release points supports prompt activation during a cooking oil fire.','Fire blankets were available within the galley for emergency use. Fire blankets smother small fires by excluding oxygen.']},
+ {n:'4.4', t:'Engine Room Visit',
+  lv:{strong:'The crew was familiar with the engine room firefighting arrangements and emergency escape routes.',average:'The crew demonstrated awareness of the foam-making equipment available, and additional familiarisation was provided on the setup of different foam arrangements.',needs:'A knowledge gap was identified regarding the operation and purpose of the EEBD.'},
+  pt:[
+   {l:'EEBD for escape only',x:'EEBDs are intended solely for escape from a hazardous atmosphere and should not be used for firefighting, rescue entry or re-entry into the affected space.'},
+   {l:'Self-inducing vs inline inductor',x:'Crew members should know whether the foam equipment uses a self-inducing branch pipe or an inline inductor, so that the system can be deployed correctly during a machinery space fire.'},
+   {l:'TIC for hot spots',x:'TICs can identify areas of elevated temperature within the engine room and support external boundary cooling assessments.'},
+   {l:'Before fixed system release',x:'Before releasing the engine room fixed firefighting system, personnel accountability, evacuation, machinery isolation, ventilation shutdown and closure of openings must be completed in accordance with vessel procedures.'},
+  ],
+  fd:[
+   {l:'No dedicated 10–15 m hose with inductor',r:'The inline inductor set was not stored with a dedicated 10 to 15 metre hose.',s:'To provide a dedicated 10 to 15 metre hose within foam equipment lockers containing inline inductor systems.'},
+   {l:'Escape trunk clear',r:'The emergency escape trunk was clear and accessible, with the ladder and safety line ready for use.'},
+   {l:'Wheeled foam extinguisher condition',r:'The wheeled foam extinguisher was {unobstructed and within service date / found past its service date}.'},
+  ],
+  sg:['To conduct periodic hands-on EEBD familiarisation covering equipment checks, donning and escape procedures.','To practise the complete foam applicator setup and operating procedure.'],
+  cap:['The EEBD pressure gauge location was reviewed during the lesson. Familiarity with equipment checks supports rapid deployment during an escape.','The foam-making equipment set was reviewed. Correct equipment selection ensures effective foam production during firefighting operations.']},
+ {n:'4.5', t:'PPE: Human Thermoregulation / Dressing / Maintenance',
+  lv:{strong:'The crew understood the correct PPE dressing sequence and the heat retained while wearing full firefighting PPE.',average:'The crew gained a better understanding of firefighter heat stress and the effect of clothing worn beneath firefighting PPE.',needs:'Further reinforcement on heat stress management and systematic dressing was required.'},
+  pt:[
+   {l:'PPE layers and heat transfer',x:'Structural firefighting PPE consists of multiple protective layers designed to provide thermal protection while reducing heat transfer to the wearer.'},
+   {l:'Lightweight undergarments',x:'Wearing boiler suits beneath firefighting PPE may increase heat retention. Suitable lightweight clothing improves comfort and mobility while reducing thermal stress.'},
+   {l:'Systematic donning',x:'Rapid dressing is important, however PPE should be donned systematically to ensure all components are fitted and secured correctly.'},
+   {l:'Emergency undressing',x:'Emergency undressing should be carried out promptly when managing a firefighter affected by heat stress, to support cooling and medical assessment.'},
+   {l:'PTT unit position',x:'The PTT unit should remain accessible on the exterior of the PPE to support communications during operations.'},
+   {l:'Cleaning PPE and masks',x:'Firefighting PPE should be cleaned or replaced as necessary, and face masks cleaned after use to maintain hygiene and readiness.'},
+  ],
+  fd:[
+   {l:'Limited PPE sizes',r:'The range of firefighting outfit sizes onboard was limited, affecting proper fitment for some designated firefighters.',s:'To procure additional fireman’s outfits in suitable sizes.'},
+   {l:'Worn flash hood',r:'Wear was observed on a flash hood in the face seal area.',s:'To ensure periodic replacement of flash hoods as the elasticity wears out over time.'},
+  ],
+  sg:['To practise final PPE checks covering fitment, equipment positioning and correct securing before deployment.','To practise emergency undressing so that the skill is retained.'],
+  cap:['The correct PPE donning sequence was demonstrated before crew members practised it. The exercise focused on fitment and final checks before deployment.','Emergency undressing was practised using a simulated firefighter casualty. Coordinated PPE removal supports cooling and earlier medical assessment.']},
+ {n:'4.6', t:'Breathing Apparatus (SCBA, EEBD): Use & Maintenance',
+  lv:{strong:'The crew demonstrated a good understanding of the seven-step BA pre-use check and the purpose behind each check.',average:'The crew was familiar with the basic operation of the BA set, although further attention was required on {air management / face mask sealing / LDV connection}.',needs:'Some crew members were unfamiliar with the BA cylinder capacity and air management, and additional practice was required on the pre-use checks.'},
+  pt:[
+   {l:'Seven-step pre-use check',x:'The BA pre-use check should be completed systematically to verify the face mask, pressure gauge, warning whistle, LDV and associated components before deployment.'},
+   {l:'Face mask seal',x:'Proper adjustment of the face mask harness is essential to achieve an effective seal and prevent air leakage during use.'},
+   {l:'Air management and exchange pressure',x:'Knowledge of cylinder capacity and air management supports safer deployment planning. BA sets should be exchanged before cylinder pressure falls below {exchange pressure} bar.'},
+   {l:'O-ring',x:'The O-ring forms a critical seal within the BA system and helps prevent air leakage.'},
+   {l:'Update BA board',x:'BA monitoring information should be updated whenever cylinder pressure, firefighter status or tasking changes, so the OSSL can manage withdrawal timings.'},
+   {l:'Carrying spare cylinders',x:'Spare BA cylinders should be carried by the cylinder neck or supported securely with both hands to reduce the risk of injury or damage.'},
+  ],
+  fd:[
+   {l:'Cylinder size onboard',r:'The vessel uses {6 / 6.8 / 9}-litre BA cylinders, and air management considerations were reviewed with the crew.'},
+   {l:'Defective face mask diaphragm',r:'The diaphragm on a BA face mask was found to be defective, and the Safety Officer was informed.',s:'To replace the defective face mask diaphragm and include it in routine BA checks.'},
+  ],
+  sg:['To conduct time-focused BA pre-use check drills to improve crew confidence.','To incorporate BA air management scenarios during drills.'],
+  cap:['The crew practised the BA pre-use checks under trainer guidance. Systematic checks identify equipment defects before entry.','The correct method of wearing and adjusting the BA face mask was demonstrated. Proper harness adjustment achieves an effective seal.']},
+ {n:'4.7', t:'Victim Handling',
+  lv:{strong:'The crew demonstrated an understanding of casualty handling principles and the importance of conducting an RSE before rescue operations.',average:'The crew understood the need to assess the casualty, hazards and evacuation route, but further practice would improve role allocation and coordination.',needs:'Uncertainty was observed during casualty handling and stretcher securing, requiring trainer guidance.'},
+  pt:[
+   {l:'RSE first',x:'An RSE should be conducted before approaching a casualty to identify hazards, determine resources and support safe rescue planning.'},
+   {l:'Plan the movement',x:'Casualty movement should be planned before lifting, considering the casualty\'s condition, clearance, evacuation route and manpower required.'},
+   {l:'One leader, clear commands',x:'One person should lead the movement and issue clear commands so that lifting and changes of direction are carried out together.'},
+   {l:'Spinal injury and log roll',x:'Where a cervical spinal injury is suspected, movement should be minimised and controlled techniques such as the log roll should be used.'},
+   {l:'Drag where access restricted',x:'If stretcher access is restricted, a suitable manual handling technique should first be used to move the casualty to where the stretcher can be positioned safely.'},
+   {l:'Straps stowed ready',x:'Stretcher straps should remain untwisted and arranged for immediate use to avoid delays during casualty securing.'},
+  ],
+  fd:[
+   {l:'Stretcher cleaned and stowed well',r:'Good practice was observed in the routine cleaning and stowage of the stretcher after use.'},
+   {l:'Straps tangled in storage',r:'The stretcher straps were found tangled in storage.',s:'To ensure stretcher straps are correctly stowed after each use.'},
+  ],
+  sg:['To incorporate RSE into casualty handling drills.','To practise casualty movement through narrow access routes, doorways and stairways.'],
+  cap:['Crew members practised the log roll technique before securing the casualty onto the Petzl stretcher. The exercise focused on coordinated handling and strap placement.','A casualty-drag technique was demonstrated for situations where stretcher access is restricted. This allows the casualty to be moved to safety before further treatment.']},
+ {n:'4.8', t:'Fire Hoses Deployment / Different Types Of Nozzles',
+  lv:{strong:'The crew showed a good understanding of the nozzle types available onboard and their applications.',average:"The crew gained a better understanding of the turbo nozzle's operating modes, and further practice would improve nozzle control and pattern selection.",needs:'Limited familiarity was observed with the turbo nozzle settings and foam equipment setup.'},
+  pt:[
+   {l:'Turbo nozzle patterns and pulsing',x:'The turbo nozzle provides multiple spray patterns and flow settings, including the pulsing technique for compartment cooling while limiting water introduced into the space.'},
+   {l:'Hose routing and bights',x:'Hose routes should be planned with sufficient bights near the entry point to prevent corners, doorways, ladders or machinery from restricting advancement.'},
+   {l:'Door entry',x:'During door entry, firefighters should assess conditions, maintain the correct position, communicate clearly and control the door opening before entering.'},
+   {l:'Inline inductor hose length',x:'A dedicated 10 to 15 metre hose is required between the inline inductor and foam branch pipe to ensure effective foam induction and quality.'},
+   {l:'Punch nozzle for first tier',x:'Punch nozzles may serve as an alternative to the Hydropen for first-tier containers where conditions permit.'},
+  ],
+  fd:[
+   {l:'Ground monitor pins corroded',r:'The portable ground monitor was found to have corroded leg-locking pins, preventing some legs from locking securely.',s:'To inspect and rectify the corroded leg-locking pins of the portable ground monitor.'},
+   {l:'No hose stored with inductor set',r:'The foam-making equipment was not stored with a dedicated hose for the inline inductor.',s:'To store a dedicated 10 to 15 metre hose together with foam-making equipment using inline inductors.'},
+  ],
+  sg:['To practise selecting and controlling the appropriate nozzle pattern for different firefighting tasks.','To practise hose routing and bight placement around shipboard obstructions.'],
+  cap:['Crew members operated the turbo nozzle under charged conditions and practised selecting different spray patterns.','The foam-making equipment was laid out to demonstrate the correct arrangement. Inline inductor systems require a hose length between the inductor and branch pipe.']},
+ {n:'4.9', t:'Rope Rescue Kit (RRK)',
+  lv:{strong:'The crew demonstrated a good understanding of the RRK setup and the 2:1 mechanical advantage system.',average:'The crew followed the basic RRK setup after demonstration, and further hands-on practice would improve anchor selection and secondary checks.',needs:'Limited familiarity was observed with assembling the RRK, requiring trainer guidance throughout.'},
+  pt:[
+   {l:'Primary and secondary anchors',x:'Primary and secondary anchors should be established using suitable structural points and correctly fitted anchor slings.'},
+   {l:'2:1 mechanical advantage',x:'The 2:1 mechanical advantage system reduces the effort required during casualty movement and supports better load control.'},
+   {l:'Secondary check',x:'Before use, a secondary check should confirm the security of the anchors, carabiner orientation and locking, pulley arrangement and rope routing.'},
+   {l:'Rope care',x:'Ropes should be kept clean and dry and handled with clean gloves to prevent damage that may affect rescue operations.'},
+  ],
+  fd:[
+   {l:'D Maillon to replace',r:'The vessel was informed that the D Maillon is no longer part of the equipment inventory and should be replaced with a self-locking carabiner.',s:'To indent a suitable self-locking carabiner to replace the D Maillon.'},
+   {l:'Tripod onboard',r:'The vessel is equipped with a {tripod model} tripod.',h:'The {tripod model} tripod may provide a quicker rescue setup, provided there is between {min height} m and {max height} m of vertical clearance to accommodate its operating limits.'},
+  ],
+  sg:['To practise RRK setup using suitable primary and secondary anchor points onboard.','To conduct secondary checks on anchor security, carabiner locking, pulley arrangement and rope routing before loading the system.'],
+  cap:['The main RRK components and their functions were explained before the practical setup.','Primary and secondary anchors were demonstrated using suitable structural points. The secondary anchor provides redundancy before the system is loaded.']},
+ {n:'4.10', t:'Hydropen',
+  lv:{strong:'The crew was familiar with the Hydropen operating principles and deployment sequence.',average:'The crew was generally familiar with the Hydropen deployment sequence, but uncertainty remained over the reel braking mechanism.',needs:'A misconception was identified regarding the Hydropen lifting arrangement, requiring trainer guidance.'},
+  pt:[
+   {l:'Hydrolock',x:'The Hydrolock secures the Hydropen drilling unit to the locking bar of a reachable container.'},
+   {l:'Reel brake and positioning bolt',x:'Correct operation of the reel braking mechanism is essential during setup, as an incorrectly set brake may allow the Hydropen to drop when raised.'},
+   {l:'First tier vs HydroLift',x:'The Hydropen may be deployed directly on first-tier containers, while the HydroLift is required for higher-tier containers.'},
+   {l:'Water drives drill then nozzle',x:'Once connected to the fire hose, water pressure drives the drilling action before the system redirects water through the nozzle into the container.'},
+  ],
+  fd:[
+   {l:'HydroLift could not reach tier',r:'The HydroLift was unable to reach the {tier} container due to suspected cable entanglement at the winch.',s:'To inspect the HydroLift winch cable for possible entanglement.'},
+   {l:'Reel brake stiff / defective',r:'The Hydropen reel brake was found to be {stiff / defective}.',s:'To inspect and service the Hydropen reel brake.'},
+  ],
+  sg:['To conduct time-focused Hydropen deployment drills.','To practise the reel brake and HydroLift lifting arrangement during practical exercises.'],
+  cap:['Crew members practised engaging and disengaging the Hydropen reel brake during setup.','The crew carried out the Hydropen deployment sequence on a container under trainer supervision.']},
+];
+
+// ---- Lesson topic (used in Trainers' Remarks openers) and more suggestion options ----
+const LESSON_EXTRA = {
+ '4.1': {tp: 'emergency organisation, the TFFP and radio communication', sg: [
+  'To incorporate the WWW communication format and CMA CGM firefighting radio phrases during fire drills to improve radio discipline.',
+  'To incorporate TIC deployment into fire drills to improve familiarity and routine use.',
+  'To incorporate the TFFP into drill briefings to improve familiarity with firefighting strategies, access routes and team responsibilities.',
+  'To practise structured radio reporting during drills, covering team location, conditions, actions taken, hazards and support required.',
+  'To conduct practical familiarisation with the TICs onboard for door entry assessment, casualty search and external boundary cooling.',
+  'To conduct regular familiarisation sessions on the emergency cards to reinforce crew roles and responsibilities.',
+  'To reinforce crew understanding of the command structure, communication channels and the communication chart.']},
+ '4.2': {tp: 'PPE preparation and the role of Dressing Assistants', sg: [
+  'To assign specific duties to each Dressing Assistant, including preparing PPE and conducting final checks.',
+  'To practise the PPE donning sequence until preparation can be completed without uncertainty or delay.',
+  'To conduct timed PPE dressing exercises with emphasis on correct sequence and final checks, rather than speed alone.',
+  'To conduct periodic dressing drills focusing on identifying exposed PPE components before deployment.',
+  'To conduct practical sessions on common dressing errors to reduce recurring discrepancies.',
+  'To ensure PPE is inspected and correctly configured before emergency deployment.']},
+ '4.3': {tp: 'galley fire hazards and the galley firefighting arrangements', sg: [
+  'To incorporate extinguishing media selection scenarios into fire drills.',
+  'To practise activating the fixed wet chemical system, including its limitations.',
+  'To include the location and operation of all galley wet chemical activation points in routine familiarisation and drills.',
+  'To conduct practical familiarisation on the galley exhaust duct CO₂ system and its intended application.',
+  'To conduct regular drills on Class F fire scenarios involving deep fat fryers.',
+  'To review portable extinguisher selection, common galley injuries and the galley first aid kit.',
+  'To include nozzle protection techniques during practical firefighting drills.']},
+ '4.4': {tp: 'the engine room firefighting arrangements and escape equipment', sg: [
+  'To conduct periodic hands-on EEBD familiarisation covering equipment checks, donning and escape procedures.',
+  'To practise the complete foam applicator setup and operating procedure.',
+  'To conduct practical familiarisation on the self-inducing foam branch pipe and pick-up tube arrangement.',
+  'To conduct scenario-based training on selecting extinguishing agents for machinery space fires.',
+  'To incorporate TIC use during drills for hot spot identification and boundary cooling.',
+  'To ensure an EEBD training set is available onboard for practical familiarisation.']},
+ '4.5': {tp: 'firefighting PPE, heat stress and emergency undressing', sg: [
+  'To practise final PPE checks covering fitment, equipment positioning and correct securing before deployment.',
+  'To practise emergency undressing so that the skill is retained.',
+  'To conduct periodic time-focused PPE dressing drills that balance speed with correct fitting and final cross-checks.',
+  'To conduct refresher training on heat stress awareness and early identification of symptoms.',
+  'To reinforce the correct positioning of the PTT unit during dressing drills and pre-deployment checks.',
+  'To incorporate routine cleaning and inspection of face masks and firefighting PPE after use.']},
+ '4.6': {tp: 'BA operation, pre-use checks and air management', sg: [
+  'To conduct time-focused BA pre-use check drills to improve crew confidence.',
+  'To incorporate BA air management scenarios during drills.',
+  'To practise face mask seal and LDV connection checks before entry into the risk area.',
+  'To update the BA monitoring board whenever cylinder pressure, firefighter status or tasking changes.',
+  'To reinforce safe BA cylinder handling during transport to the Staging Area.',
+  'To conduct periodic inspections of face masks, LDVs and harness assemblies to identify defects before use.']},
+ '4.7': {tp: 'casualty handling and evacuation techniques', sg: [
+  'To incorporate RSE into casualty handling drills.',
+  'To practise casualty movement through narrow access routes, doorways and stairways.',
+  'To include practical log roll exercises to improve familiarity with spinal injury management.',
+  'To conduct practical drills with the Petzl stretcher focusing on strap tension and casualty packaging.',
+  'To reinforce clear commands from the Medical Team Leader during lifting and changes of direction.',
+  'To maintain stretcher housekeeping by ensuring straps are correctly stowed and the stretcher is cleaned after each use.']},
+ '4.8': {tp: 'hose deployment, nozzle types and foam equipment', sg: [
+  'To practise selecting and controlling the appropriate nozzle pattern for different firefighting tasks.',
+  'To practise hose routing and bight placement around shipboard obstructions.',
+  'To incorporate hands-on turbo nozzle drills covering pattern selection, gallonage adjustment and nozzle handling.',
+  'To practise door entry covering condition assessment, positioning, communication, controlled opening and water application.',
+  'To conduct charged hose drills to improve nozzle control and familiarity with reaction force.',
+  'To conduct time-focused foam application exercises covering proportioning and coverage.',
+  'To conduct practical drills covering punch nozzle deployment during container fire scenarios.']},
+ '4.9': {tp: 'the RRK setup and rope rescue procedures', sg: [
+  'To practise RRK setup using suitable primary and secondary anchor points onboard.',
+  'To conduct secondary checks on anchor security, carabiner locking, pulley arrangement and rope routing before loading the system.',
+  'To conduct time-focused drills covering complete RRK setup and casualty recovery.',
+  'To conduct scenario-based casualty recovery exercises using the RRK.',
+  'To include periodic inspection and housekeeping checks of rescue ropes and associated equipment.',
+  'To incorporate a safety line during rescue practice for additional protection of rescuer and casualty.']},
+ '4.10': {tp: 'Hydropen deployment and operation', sg: [
+  'To conduct time-focused Hydropen deployment drills.',
+  'To practise the reel brake and HydroLift lifting arrangement during practical exercises.',
+  'To conduct periodic hands-on Hydropen drills covering first-tier and elevated container scenarios.',
+  'To practise the complete Hydrolock and telescopic lift deployment procedures.',
+  'To include refresher training on the braking mechanism and positioning bolt arrangement.',
+  'To conduct regular practical deployment exercises to reduce setup time during an actual emergency.']},
+};
+// Trainers' Remarks for lessons: opener by crew level + EVIDENCE from the teaching points tapped.
+// {tp} = lesson topic, {ev} = what the crew did (from the tapped points, max 3).
+const LEVEL_OPENERS = {
+ strong: ['The crew demonstrated a good understanding of {tp} by {ev}.',
+          'Good familiarity with {tp} was observed, with the crew {ev} with minimal guidance.',
+          'The crew showed confidence in {tp}, correctly {ev}.'],
+ average: ['The crew demonstrated a general understanding of {tp} by {ev}, although further practice would build confidence.',
+           'With some guidance, the crew demonstrated {tp} by {ev}.',
+           'The crew was generally familiar with {tp}, {ev} after initial guidance.'],
+ needs: ['A knowledge gap was identified regarding {tp}, with trainer guidance required when {ev}.',
+         'Limited familiarity with {tp} was observed, and step-by-step guidance was required when {ev}.',
+         'Further training is required on {tp}, as uncertainty was observed when {ev}.'],
+};
+// Evidence phrase for each teaching point, in the same order as pt in LESSONS
+const EVIDENCE = {
+ '4.1': ['explaining how the TFFP supports deployment planning', 'using the WWW format and CMA CGM radio phrases in practice reports', 'covering location, conditions, hazards, actions and support required in radio reports', 'identifying the intended use of each TIC onboard'],
+ '4.2': ['carrying out final checks as Dressing Assistants', 'balancing dressing speed with correct fitting', 'following the correct donning sequence', 'carrying the bicycle horn for signalling'],
+ '4.3': ['selecting the correct extinguishing medium for each galley fire type', 'locating the wet chemical system activation points', 'explaining that the galley CO₂ system protects the exhaust duct only', 'describing isolation of the energy source before attacking the fire', 'using nozzle patterns for protective water cover'],
+ '4.4': ['explaining that the EEBD is for escape only', 'setting up the foam equipment according to its type', 'using the TIC to identify hot spots', 'listing the checks required before fixed system release'],
+ '4.5': ['explaining the protective function of each PPE layer', 'selecting lightweight undergarments beneath the PPE', 'donning the PPE systematically', 'carrying out emergency undressing on a simulated casualty', 'positioning the PTT unit on the exterior of the PPE', 'explaining the cleaning of PPE and face masks after use'],
+ '4.6': ['completing the seven-step BA pre-use check', 'achieving an effective face mask seal', 'calculating air duration for the cylinders onboard', 'explaining the function of the O-ring', 'updating the BA board as conditions changed', 'carrying spare cylinders by the neck or with both hands'],
+ '4.7': ['conducting an RSE before approaching the casualty', 'planning the casualty movement before lifting', 'following commands from a single team leader', 'applying the log roll for a suspected spinal injury', 'dragging the casualty where stretcher access was restricted', 'stowing the stretcher straps ready for immediate use'],
+ '4.8': ['adjusting turbo nozzle patterns and applying the pulsing technique', 'placing hose bights around shipboard obstructions', 'carrying out the door entry sequence', 'assembling the inline inductor with the correct hose length', 'explaining when the punch nozzle can replace the Hydropen'],
+ '4.9': ['establishing primary and secondary anchors', 'rigging the 2:1 mechanical advantage system', 'conducting a secondary check before loading the system', 'explaining correct rope care'],
+ '4.10': ['securing the Hydrolock to the container locking bar', 'operating the reel brake and positioning bolt', 'explaining when the HydroLift is required', 'describing how water drives the drill before discharging through the nozzle'],
+};
+LESSONS.forEach(L => { Object.assign(L, LESSON_EXTRA[L.n] || {}); L.pt.forEach((p, i) => { p.ev = (EVIDENCE[L.n] || [])[i]; }); });
